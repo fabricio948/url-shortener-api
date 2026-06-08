@@ -5,8 +5,8 @@ spring:
   application:
     name: api
 
-  # Configuração do Banco Histórico (MongoDB)
   data:
+    # Configuração do Banco Histórico (MongoDB)
     mongodb:
       host: ${MONGO_HOST:localhost}
       port: ${MONGO_PORT:27017}
