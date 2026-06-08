@@ -1,11 +1,15 @@
 package com.urlshortener.api.controller;
 import com.urlshortener.api.dto.ShortenUrlRequest;
 import com.urlshortener.api.dto.ShortenUrlResponse;
+import com.urlshortener.api.dto.UserLinksResponse;
 import com.urlshortener.api.service.UrlShortenerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -46,5 +50,33 @@ public class UrlShortenerController {
         return ResponseEntity.status(HttpStatus.FOUND)
                 .location(URI.create(originalUrl))
                 .build();
+    }
+
+    /*
+     * ENDPOINT 3: GET /api/urls
+     * Retorna o relatório de links cadastrados de forma paginada e agrupada por usuário.
+     * Padrão: página 0, trazendo 10 registros por vez.
+     */
+    @GetMapping("/api/urls")
+    @Operation(summary = "Get all shortened URLs with pagination", description = "Returns a clean report of links grouped by user with high data safety.")
+    public ResponseEntity<Page<UserLinksResponse>> getAllUrls(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<UserLinksResponse> response = service.getAllUrlsPaginaded(pageable);
+        return ResponseEntity.ok(response);
+    }
+
+    /*
+     * ENDPOINT 4: DELETE /api/urls/{id}
+     * Remove o registro do MongoDB, expulsa o link da memória do Redis
+     * e abate o contador de uso simultâneo do usuário.
+     */
+    @DeleteMapping("/api/urls/{id}")
+    @Operation(summary = "Delete link mapping by ID", description = "Deletes historical documents, purges Redis active cache, and releases user quotas.")
+    public ResponseEntity<Void> deleteUrl(@PathVariable String id) {
+        service.deleteUrlById(id);
+        return ResponseEntity.noContent().build(); // Retorna o status HTTP 204 (No Content) padrão de deleções de sucesso
     }
 }

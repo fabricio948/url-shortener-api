@@ -3,10 +3,13 @@ package com.urlshortener.api.service.impl;
 import com.urlshortener.api.domain.UrlMapping;
 import com.urlshortener.api.dto.ShortenUrlRequest;
 import com.urlshortener.api.dto.ShortenUrlResponse;
+import com.urlshortener.api.dto.UserLinksResponse;
 import com.urlshortener.api.repository.UrlMappingRepository;
 import com.urlshortener.api.service.UrlShortenerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -16,6 +19,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -36,21 +42,20 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         String currentCountStr = redisTemplate.opsForValue().get(userLimitKey);
         int currentCount = currentCountStr != null ? Integer.parseInt(currentCountStr) : 0;
 
-        if (currentCount >= 5) {
+        // REGRA NOVA: Alterado rigorosamente para o limite de 4 links ativos
+        if (currentCount >= 3) {
             log.warn("[LIMIT BLOCKED] User {} blocked. Current active links: {}", request.userEmail(), currentCount);
-            throw new IllegalStateException("User has reached the limit of 5 active links.");
+            throw new IllegalStateException("User has reached the strict limit of 4 active links.");
         }
 
         String shortCode = generateShortCode(request.originalUrl(), request.userEmail());
         Instant now = Instant.now();
         Instant expiresAt = now.plus(Duration.ofMinutes(10));
 
-        // Logs para o MongoDB
         log.info("[MONGODB] Persisting historical mapping in database. Code: {} -> URL: {}", shortCode, request.originalUrl());
         UrlMapping urlMapping = new UrlMapping(null, shortCode, request.originalUrl(), request.userName(), request.userEmail(), now, expiresAt);
         repository.save(urlMapping);
 
-        // Logs para o Redis
         log.info("[REDIS] Saving active short link with 10 minutes TTL. Key: {}{}", URL_PREFIX, shortCode);
         redisTemplate.opsForValue().set(URL_PREFIX + shortCode, request.originalUrl(), Duration.ofMinutes(10));
 
@@ -76,6 +81,59 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
 
         log.info("[REDIRECT] URL found in memory. Redirecting user to: {}", originalUrl);
         return originalUrl;
+    }
+
+    @Override
+    public Page<UserLinksResponse> getAllUrlsPaginaded(Pageable pageable) {
+        log.info("[MONGODB] Fetching page {} from database for unified report.", pageable.getPageNumber());
+
+        // Puxa do MongoDB usando paginação nativa para não estourar a memória RAM
+        Page<UrlMapping> entityPage = repository.findAll(pageable);
+
+        // Agrupa os links por E-mail do usuário usando a Stream API de forma organizada
+        Map<String, List<UrlMapping>> groupedByUser = entityPage.getContent().stream()
+                .collect(Collectors.groupingBy(UrlMapping::getUserEmail));
+
+        // Mapeia o resultado agrupado para o nosso DTO estruturado
+        return entityPage.map(mapping -> {
+            List<UrlMapping> userMappings = groupedByUser.get(mapping.getUserEmail());
+
+            List<UserLinksResponse.LinkInfo> linkInfos = userMappings.stream()
+                    .map(m -> new UserLinksResponse.LinkInfo(
+                            m.getId(), // INJEÇÃO DO ID DO MONGODB AQUI
+                            "http://localhost:8080/r/" + m.getShortCode(),
+                            m.getOriginalUrl(),
+                            m.getShortCode()
+                    ))
+                    .collect(Collectors.toList());
+
+            return new UserLinksResponse(mapping.getUserName(), mapping.getUserEmail(), linkInfos);
+        });
+    }
+
+    @Override
+    public void deleteUrlById(String id) {
+        log.info("[MONGODB] Searching link mapping for deletion. ID: {}", id);
+        UrlMapping urlMapping = repository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Link mapping not found for the provided ID."));
+
+        // 1. Apagar do MongoDB (Histórico)
+        log.info("[MONGODB] Deleting historical record ID: {}", id);
+        repository.deleteById(id);
+
+        // 2. Apagar da memória ativa do Redis
+        String redisUrlKey = URL_PREFIX + urlMapping.getShortCode();
+        log.info("[REDIS] Evicting active cache short link key: {}", redisUrlKey);
+        redisTemplate.delete(redisUrlKey);
+
+        // 3. Decrementar o limite do usuário para liberar espaço para novos encurtamentos
+        String userLimitKey = USER_LIMIT_PREFIX + urlMapping.getUserEmail();
+        String currentCountStr = redisTemplate.opsForValue().get(userLimitKey);
+        if (currentCountStr != null && Integer.parseInt(currentCountStr) > 0) {
+            log.info("[REDIS] Decrementing link usage count for user: {}", urlMapping.getUserEmail());
+            redisTemplate.opsForValue().decrement(userLimitKey);
+        }
+        log.info("[SUCCESS] Record completely deleted from infrastructure.");
     }
 
     private String generateShortCode(String url, String email) {
