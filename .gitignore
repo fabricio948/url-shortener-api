@@ -1,0 +1,41 @@
+# Build
+target/
+*.class
+
+# Environment
+.env
+.env.local
+.env.dev
+.env.prod
+
+# Logs
+*.log
+logs/
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Eclipse / STS
+.project
+.classpath
+.settings/
+.factorypath
+.springBeans
+.sts4-cache
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Sistema Operacional
+.DS_Store
+Thumbs.db
