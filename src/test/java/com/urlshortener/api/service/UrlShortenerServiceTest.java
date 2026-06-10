@@ -77,7 +77,6 @@ class UrlShortenerServiceTest {
 
         // Valida se a mensagem de erro customizada está correta
         assertEquals("User has reached the strict limit of 3 active links.", exception.getMessage());
-
         // Garante que o sistema travou ANTES de salvar qualquer dado no MongoDB ou Redis
         verify(repository, never()).save(any(UrlMapping.class));
         verify(valueOperations, never()).set(anyString(), anyString(), any());

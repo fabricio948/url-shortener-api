@@ -45,8 +45,7 @@ public class UrlShortenerServiceImpl implements UrlShortenerService {
         // REGRA NOVA: Alterado rigorosamente para o limite de 4 links ativos
         if (currentCount >= 3) {
             log.warn("[LIMIT BLOCKED] User {} blocked. Current active links: {}", request.userEmail(), currentCount);
-            throw new IllegalStateException("User has reached the strict limit of 4 active links.");
-        }
+            throw new IllegalStateException("User has reached the strict limit of 3 active links.");        }
 
         String shortCode = generateShortCode(request.originalUrl(), request.userEmail());
         Instant now = Instant.now();
