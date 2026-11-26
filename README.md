@@ -48,17 +48,46 @@ openssl rand -base64 48
 ```
 
 O `.env` está no `.gitignore` e não deve ser commitado. O `.env.example` contém
-apenas valores falsos.
+apenas valores falsos. O Docker Compose lê o `.env` automaticamente; sem ele, o
+`up` falha com a mensagem `defina DB_PASSWORD no .env`.
 
 ## Subir com Docker Compose
 
+Com o `.env` criado, o comando que **roda o projeto** é o `up`. Ele compila a
+imagem da API e sobe o MySQL e a API:
+
 ```bash
 docker compose up -d --build
+```
+
+`-d` executa em segundo plano e `--build` recompila a imagem.
+
+Confira se os containers estão de pé:
+
+```bash
 docker compose ps
+```
+
+O `mysql_dev` deve aparecer como `healthy` e o `spring_java25_api` como `Up`. A
+API só inicia depois que o MySQL fica saudável (`healthcheck`).
+
+Para ver as últimas 100 linhas do log da API (**não sobe nada**, apenas exibe):
+
+```bash
 docker compose logs --tail=100 api
 ```
 
-A API espera o MySQL ficar saudável (`healthcheck`) antes de iniciar.
+Para acompanhar os logs ao vivo:
+
+```bash
+docker compose logs -f api
+```
+
+Se alterar apenas código Java, recompile e reinicie somente a API:
+
+```bash
+docker compose up -d --build api
+```
 
 - API: `http://localhost:8080` (ou `SERVER_PORT`)
 - MySQL: `localhost:3306` (ou `DB_PORT`)
