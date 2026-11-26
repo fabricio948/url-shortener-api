@@ -85,6 +85,42 @@ public class GlobalExceptionHandler {
             HttpStatus.UNAUTHORIZED, "Unauthorized", exception.getMessage(), request));
   }
 
+  @ExceptionHandler(ShortCodeAlreadyExistsException.class)
+  public ResponseEntity<ProblemDetail> handleShortCodeAlreadyExists(
+      ShortCodeAlreadyExistsException exception, HttpServletRequest request) {
+    return toResponse(
+        HttpStatus.CONFLICT,
+        createProblem(HttpStatus.CONFLICT, "Conflict", exception.getMessage(), request));
+  }
+
+  @ExceptionHandler(ActiveLinkLimitReachedException.class)
+  public ResponseEntity<ProblemDetail> handleActiveLinkLimitReached(
+      ActiveLinkLimitReachedException exception, HttpServletRequest request) {
+    return toResponse(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        createProblem(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            "Unprocessable Entity",
+            exception.getMessage(),
+            request));
+  }
+
+  @ExceptionHandler(ResourceNotFoundException.class)
+  public ResponseEntity<ProblemDetail> handleResourceNotFound(
+      ResourceNotFoundException exception, HttpServletRequest request) {
+    return toResponse(
+        HttpStatus.NOT_FOUND,
+        createProblem(HttpStatus.NOT_FOUND, "Not Found", exception.getMessage(), request));
+  }
+
+  @ExceptionHandler(ResourceAccessDeniedException.class)
+  public ResponseEntity<ProblemDetail> handleResourceAccessDenied(
+      ResourceAccessDeniedException exception, HttpServletRequest request) {
+    return toResponse(
+        HttpStatus.FORBIDDEN,
+        createProblem(HttpStatus.FORBIDDEN, "Forbidden", exception.getMessage(), request));
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ProblemDetail> handleUnexpected(
       Exception exception, HttpServletRequest request) {
