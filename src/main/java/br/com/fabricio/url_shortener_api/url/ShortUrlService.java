@@ -2,6 +2,7 @@ package br.com.fabricio.url_shortener_api.url;
 
 import br.com.fabricio.url_shortener_api.shared.config.LinkProperties;
 import br.com.fabricio.url_shortener_api.shared.exception.ActiveLinkLimitReachedException;
+import br.com.fabricio.url_shortener_api.shared.exception.LinkExpiredException;
 import br.com.fabricio.url_shortener_api.shared.exception.ResourceAccessDeniedException;
 import br.com.fabricio.url_shortener_api.shared.exception.ResourceNotFoundException;
 import br.com.fabricio.url_shortener_api.shared.exception.ShortCodeAlreadyExistsException;
@@ -77,6 +78,38 @@ public class ShortUrlService {
     }
 
     shortUrlRepository.delete(shortUrl);
+  }
+
+  @Transactional
+  public String redirect(String shortCode) {
+    ShortUrl shortUrl =
+        shortUrlRepository.findByShortCode(shortCode).orElseThrow(ResourceNotFoundException::new);
+
+    LocalDateTime now = LocalDateTime.now(clock);
+    if (!shortUrl.getExpiresAt().isAfter(now)) {
+      throw new LinkExpiredException();
+    }
+
+    shortUrl.setClickCount(shortUrl.getClickCount() + 1);
+    shortUrlRepository.save(shortUrl);
+    return shortUrl.getOriginalUrl();
+  }
+
+  @Transactional(readOnly = true)
+  public ShortUrlStatsResponse getStats(Long userId, String shortCode) {
+    ShortUrl shortUrl =
+        shortUrlRepository.findByShortCode(shortCode).orElseThrow(ResourceNotFoundException::new);
+
+    if (!shortUrl.getUser().getId().equals(userId)) {
+      throw new ResourceAccessDeniedException();
+    }
+
+    return new ShortUrlStatsResponse(
+        shortUrl.getShortCode(),
+        shortUrl.getOriginalUrl(),
+        shortUrl.getClickCount(),
+        shortUrl.getCreatedAt(),
+        shortUrl.getExpiresAt());
   }
 
   private String resolveShortCode(String customAlias) {

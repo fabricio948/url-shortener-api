@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import br.com.fabricio.url_shortener_api.shared.config.LinkProperties;
 import br.com.fabricio.url_shortener_api.shared.exception.ActiveLinkLimitReachedException;
+import br.com.fabricio.url_shortener_api.shared.exception.LinkExpiredException;
 import br.com.fabricio.url_shortener_api.shared.exception.ResourceAccessDeniedException;
 import br.com.fabricio.url_shortener_api.shared.exception.ResourceNotFoundException;
 import br.com.fabricio.url_shortener_api.shared.exception.ShortCodeAlreadyExistsException;
@@ -237,13 +238,117 @@ class ShortUrlServiceTest {
     verify(shortUrlRepository, never()).delete(any(ShortUrl.class));
   }
 
+  @Test
+  void shouldRedirectAndIncrementClickCount() {
+    // Dado
+    ShortUrl shortUrl =
+        shortUrl("abc1234", 3L, NOW_DATE_TIME, NOW_DATE_TIME.plusSeconds(TTL_SECONDS));
+    when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+    // Quando
+    String originalUrl = shortUrlService.redirect("abc1234");
+
+    // Então
+    assertThat(originalUrl).isEqualTo("https://example.com");
+    assertThat(shortUrl.getClickCount()).isEqualTo(4L);
+    verify(shortUrlRepository).save(shortUrl);
+  }
+
+  @Test
+  void shouldThrowWhenRedirectingUnknownCode() {
+    // Dado
+    when(shortUrlRepository.findByShortCode("naoexiste")).thenReturn(Optional.empty());
+
+    // Quando / Então
+    assertThatThrownBy(() -> shortUrlService.redirect("naoexiste"))
+        .isInstanceOf(ResourceNotFoundException.class)
+        .hasMessage("Link não encontrado.");
+    verify(shortUrlRepository, never()).save(any(ShortUrl.class));
+  }
+
+  @Test
+  void shouldThrowWhenRedirectingExpiredLink() {
+    // Dado: expiresAt igual a agora já conta como expirado
+    ShortUrl shortUrl =
+        shortUrl("abc1234", 3L, NOW_DATE_TIME.minusMinutes(5), NOW_DATE_TIME);
+    when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+
+    // Quando / Então
+    assertThatThrownBy(() -> shortUrlService.redirect("abc1234"))
+        .isInstanceOf(LinkExpiredException.class)
+        .hasMessage("Link expirado.");
+    assertThat(shortUrl.getClickCount()).isEqualTo(3L);
+    verify(shortUrlRepository, never()).save(any(ShortUrl.class));
+  }
+
+  @Test
+  void shouldReturnStatsForOwner() {
+    // Dado
+    ShortUrl shortUrl =
+        shortUrl("abc1234", 12L, NOW_DATE_TIME, NOW_DATE_TIME.plusSeconds(TTL_SECONDS));
+    when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+    when(user.getId()).thenReturn(USER_ID);
+
+    // Quando
+    ShortUrlStatsResponse stats = shortUrlService.getStats(USER_ID, "abc1234");
+
+    // Então
+    assertThat(stats.shortCode()).isEqualTo("abc1234");
+    assertThat(stats.originalUrl()).isEqualTo("https://example.com");
+    assertThat(stats.clickCount()).isEqualTo(12L);
+    assertThat(stats.createdAt()).isEqualTo(NOW_DATE_TIME);
+    assertThat(stats.expiresAt()).isEqualTo(NOW_DATE_TIME.plusSeconds(TTL_SECONDS));
+  }
+
+  @Test
+  void shouldThrowWhenGettingStatsFromAnotherUser() {
+    // Dado
+    ShortUrl shortUrl =
+        shortUrl("abc1234", 12L, NOW_DATE_TIME, NOW_DATE_TIME.plusSeconds(TTL_SECONDS));
+    when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(shortUrl));
+    when(user.getId()).thenReturn(2L);
+
+    // Quando / Então
+    assertThatThrownBy(() -> shortUrlService.getStats(USER_ID, "abc1234"))
+        .isInstanceOf(ResourceAccessDeniedException.class)
+        .hasMessage("Você não tem permissão para acessar este link.");
+  }
+
+  @Test
+  void shouldThrowWhenGettingStatsFromUnknownCode() {
+    // Dado
+    when(shortUrlRepository.findByShortCode("naoexiste")).thenReturn(Optional.empty());
+
+    // Quando / Então
+    assertThatThrownBy(() -> shortUrlService.getStats(USER_ID, "naoexiste"))
+        .isInstanceOf(ResourceNotFoundException.class)
+        .hasMessage("Link não encontrado.");
+  }
+
+  @Test
+  void shouldReturnStatsForExpiredLink() {
+    // Dado
+    ShortUrl expiredShortUrl =
+        shortUrl(
+            "abc1234", 7L, NOW_DATE_TIME.minusMinutes(10), NOW_DATE_TIME.minusMinutes(1));
+    when(shortUrlRepository.findByShortCode("abc1234")).thenReturn(Optional.of(expiredShortUrl));
+    when(user.getId()).thenReturn(USER_ID);
+
+    // Quando
+    ShortUrlStatsResponse stats = shortUrlService.getStats(USER_ID, "abc1234");
+
+    // Então
+    assertThat(stats.clickCount()).isEqualTo(7L);
+    assertThat(stats.expiresAt()).isEqualTo(NOW_DATE_TIME.minusMinutes(1));
+  }
+
   private ShortUrl shortUrl(String shortCode, LocalDateTime createdAt) {
+    return shortUrl(shortCode, 0L, createdAt, createdAt.plusSeconds(TTL_SECONDS));
+  }
+
+  private ShortUrl shortUrl(
+      String shortCode, long clickCount, LocalDateTime createdAt, LocalDateTime expiresAt) {
     return new ShortUrl(
-        "https://example.com",
-        shortCode,
-        0L,
-        createdAt.plusSeconds(TTL_SECONDS),
-        createdAt,
-        user);
+        "https://example.com", shortCode, clickCount, expiresAt, createdAt, user);
   }
 }

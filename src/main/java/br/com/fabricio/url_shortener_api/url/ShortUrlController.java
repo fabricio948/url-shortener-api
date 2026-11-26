@@ -36,6 +36,12 @@ public class ShortUrlController {
     return shortUrlService.list(userId);
   }
 
+  @GetMapping("/{shortCode}/stats")
+  public ShortUrlStatsResponse stats(
+      @PathVariable String shortCode, @AuthenticationPrincipal Long userId) {
+    return shortUrlService.getStats(userId, shortCode);
+  }
+
   @DeleteMapping("/{shortCode}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void delete(

@@ -121,6 +121,14 @@ public class GlobalExceptionHandler {
         createProblem(HttpStatus.FORBIDDEN, "Forbidden", exception.getMessage(), request));
   }
 
+  @ExceptionHandler(LinkExpiredException.class)
+  public ResponseEntity<ProblemDetail> handleLinkExpired(
+      LinkExpiredException exception, HttpServletRequest request) {
+    return toResponse(
+        HttpStatus.GONE,
+        createProblem(HttpStatus.GONE, "Gone", exception.getMessage(), request));
+  }
+
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ProblemDetail> handleUnexpected(
       Exception exception, HttpServletRequest request) {

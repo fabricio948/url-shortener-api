@@ -76,6 +76,10 @@ public class ShortUrl {
     return clickCount;
   }
 
+  public void setClickCount(long clickCount) {
+    this.clickCount = clickCount;
+  }
+
   public LocalDateTime getExpiresAt() {
     return expiresAt;
   }
