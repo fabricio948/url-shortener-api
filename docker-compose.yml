@@ -28,6 +28,7 @@ services:
       DB_NAME: ${DB_NAME:?defina DB_NAME no .env}
       DB_USER: ${DB_USER:?defina DB_USER no .env}
       DB_PASSWORD: ${DB_PASSWORD:?defina DB_PASSWORD no .env}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
     depends_on:
       db:
         condition: service_healthy
